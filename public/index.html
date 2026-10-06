@@ -5,13 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Registro de Equipos</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; }
+    body { font-family: Arial, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; color: #333; }
     .form-group { margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; font-weight: bold; }
     input, select, button { width: 100%; padding: 10px; box-sizing: border-box; }
-    button { background-color: #007bff; color: white; border: none; cursor: pointer; margin-top: 10px; border-radius: 4px; }
+    button { background-color: #007bff; color: white; border: none; cursor: pointer; margin-top: 10px; border-radius: 4px; font-weight: bold; }
     button:hover { background-color: #0056b3; }
-    .excel-btn { background-color: #28a745; margin-top: 25px; text-align: center; display: block; text-decoration: none; color: white; padding: 10px; border-radius: 4px; }
+    .excel-btn { background-color: #28a745; margin-top: 25px; text-align: center; display: block; text-decoration: none; color: white; padding: 10px; border-radius: 4px; font-weight: bold; }
+    
+    /* Estilos del Panel de Administración */
+    .admin-card { margin-top: 40px; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: #f9f9f9; }
+    .admin-card h3 { margin-top: 0; color: #444; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -51,7 +56,36 @@
 
   <a href="/api/export-excel" class="excel-btn">Descargar Reporte en Excel</a>
 
+  <!-- ========================================== -->
+  <!-- SECCIÓN DE ADMINISTRACIÓN                  -->
+  <!-- ========================================== -->
+  <div class="admin-card">
+    <h3>Panel de Administración</h3>
+
+    <!-- Formulario de Login -->
+    <div id="loginSection">
+      <div class="form-group">
+        <label for="adminPass">Contraseña de Administrador:</label>
+        <input type="password" id="adminPass" placeholder="Ingresa contraseña">
+      </div>
+      <button type="button" onclick="loginAdmin()">Ingresar como Admin</button>
+    </div>
+
+    <!-- Formulario de Agregar Equipo (Oculto inicialmente) -->
+    <div id="adminPanel" class="hidden">
+      <p style="color: green; font-weight: bold;">✔ Sesión de Administrador Activa</p>
+      <div class="form-group">
+        <label for="newTeamName">Nombre del Nuevo Equipo:</label>
+        <input type="text" id="newTeamName" placeholder="Ej: Equipo Delta">
+      </div>
+      <button type="button" onclick="addTeam()" style="background-color: #6f42c1;">Agregar Equipo</button>
+    </div>
+  </div>
+
   <script>
+    let currentAdminPassword = '';
+
+    // Cargar equipos en la lista desplegable
     async function loadTeams() {
       const select = document.getElementById('teamId');
       try {
@@ -74,6 +108,7 @@
       }
     }
 
+    // Registro de Usuario
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const payload = {
@@ -102,6 +137,57 @@
         alert('Error al conectar con el servidor.');
       }
     });
+
+    // Iniciar Sesión de Administrador
+    async function loginAdmin() {
+      const pass = document.getElementById('adminPass').value;
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          currentAdminPassword = pass;
+          document.getElementById('loginSection').classList.add('hidden');
+          document.getElementById('adminPanel').classList.remove('hidden');
+        } else {
+          alert(data.error);
+        }
+      } catch (err) {
+        alert('Error al verificar la contraseña.');
+      }
+    }
+
+    // Agregar Nuevo Equipo
+    async function addTeam() {
+      const name = document.getElementById('newTeamName').value;
+      if (!name) return alert('Escribe el nombre del equipo');
+
+      try {
+        const res = await fetch('/api/teams', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: currentAdminPassword,
+            name: name
+          })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          alert('¡Equipo creado con éxito!');
+          document.getElementById('newTeamName').value = '';
+          loadTeams(); // Recarga la lista para mostrar el nuevo equipo inmediatamente
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (err) {
+        alert('Error al crear el equipo.');
+      }
+    }
 
     loadTeams();
   </script>
