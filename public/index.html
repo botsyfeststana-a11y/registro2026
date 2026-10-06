@@ -121,3 +121,62 @@
         if (eq.disponible) {
           option.textContent = `${eq.nombre} (${eq.total_inscritos}/3 inscritos)`;
         } else {
+          option.textContent = `${eq.nombre} (LLENO - 3/3)`;
+          option.disabled = true;
+        }
+        selectEquipo.appendChild(option);
+      });
+    } else {
+      selectEquipo.innerHTML = '<option value="">-- Sin equipos disponibles --</option>';
+    }
+  });
+
+  // Enviar el formulario al backend
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Procesando...';
+
+    const payload = {
+      nombre_completo: document.getElementById('nombre').value,
+      edad: parseInt(document.getElementById('edad').value),
+      whatsapp: document.getElementById('whatsapp').value,
+      carrera: document.getElementById('carrera').value,
+      equipo_id: parseInt(selectEquipo.value)
+    };
+
+    try {
+      const res = await fetch('/api/registro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        mostrarMensaje('¡Registro completado con éxito!', 'success');
+        form.reset();
+        selectEquipo.disabled = true;
+        cargarCompetencias(); // Recargar los conteos
+      } else {
+        mostrarMensaje(data.error || 'Ocurrió un error en el registro.', 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('Error de conexión con el servidor.', 'error');
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Completar Registro';
+    }
+  });
+
+  function mostrarMensaje(texto, tipo) {
+    statusMsg.textContent = texto;
+    statusMsg.className = `status-msg ${tipo}`;
+  }
+
+  cargarCompetencias();
+</script>
+
+</body>
+</html>
