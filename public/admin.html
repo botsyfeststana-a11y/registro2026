@@ -17,7 +17,7 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 750px; }
+    .container { width: 100%; max-width: 800px; }
     .card { background: var(--card); padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
     h1, h2 { color: var(--text); margin-bottom: 15px; }
     .form-group { margin-bottom: 12px; }
@@ -25,4 +25,268 @@
     input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; }
     .btn { padding: 10px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; width: 100%; font-size: 0.95rem; }
     .btn-excel { background: var(--success); text-decoration: none; display: block; text-align: center; }
-    .btn-edit { background: var(--warning); padding: 6px 10px; font-size: 0.
+    .btn-edit { background: var(--warning); padding: 6px 10px; font-size: 0.8rem; width: auto; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .btn-delete { background: var(--danger); padding: 6px 10px; font-size: 0.8rem; width: auto; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 5px; }
+    .hidden { display: none; }
+    .status-msg { margin-top: 10px; font-size: 0.85rem; font-weight: 600; text-align: center; }
+    .list-item { padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+    .list-item:last-child { border-bottom: none; }
+    .actions { display: flex; align-items: center; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 10px; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { background-color: #f8fafc; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Sección de Autenticación -->
+  <div id="authSection" class="card">
+    <h1>Acceso Administrador</h1>
+    <div class="form-group">
+      <label for="adminPass">Contraseña de Administrador</label>
+      <input type="password" id="adminPass" placeholder="Ingresa tu clave de Render">
+    </div>
+    <button class="btn" id="btnLogin">Ingresar al Panel</button>
+    <div id="authMsg" class="status-msg" style="color: red;"></div>
+  </div>
+
+  <!-- Panel de Control -->
+  <div id="panelSection" class="hidden">
+    
+    <!-- Descargar Excel -->
+    <div class="card">
+      <h2>Exportar Datos</h2>
+      <p style="margin-bottom: 15px; font-size: 0.9rem; color: #475569;">
+        Descarga el reporte completo de participantes en formato Excel.
+      </p>
+      <a id="btnExcel" href="#" class="btn btn-excel">📥 Descargar Reporte en Excel (.xlsx)</a>
+    </div>
+
+    <!-- Crear / Editar Competencia -->
+    <div class="card">
+      <h2 id="formTitle">Crear Competencia</h2>
+      <form id="formCompetencia">
+        <input type="hidden" id="editCompId">
+        <div class="form-group">
+          <label for="nuevaComp">Nombre de la Competencia</label>
+          <input type="text" id="nuevaComp" required placeholder="Ej. Robótica">
+        </div>
+        <div class="form-group">
+          <label for="maxCupos">Límite Máximo de Cupos</label>
+          <input type="number" id="maxCupos" value="3" min="1" required placeholder="3">
+        </div>
+        <button class="btn" type="submit" id="btnSubmitForm">Guardar Competencia</button>
+        <button class="btn hidden" type="button" id="btnCancelarEdit" style="background: #64748b; margin-top: 8px;">Cancelar Edición</button>
+      </form>
+    </div>
+
+    <!-- Lista de Competencias Activas -->
+    <div class="card">
+      <h2>Competencias Creadas</h2>
+      <div id="listaCompetencias">
+        <p style="font-size: 0.85rem; color: #64748b;">Cargando...</p>
+      </div>
+    </div>
+
+    <!-- Lista y Eliminación de Participantes -->
+    <div class="card">
+      <h2>Participantes Inscritos</h2>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Carrera</th>
+              <th>Competencia</th>
+              <th>Equipo</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tablaParticipantes">
+            <tr><td colspan="5" style="color: #64748b;">Cargando participantes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let adminPassword = '';
+
+  const authSection = document.getElementById('authSection');
+  const panelSection = document.getElementById('panelSection');
+  const adminPassInput = document.getElementById('adminPass');
+  const btnLogin = document.getElementById('btnLogin');
+  const authMsg = document.getElementById('authMsg');
+  const btnExcel = document.getElementById('btnExcel');
+  const listaCompetencias = document.getElementById('listaCompetencias');
+  const tablaParticipantes = document.getElementById('tablaParticipantes');
+  
+  const formCompetencia = document.getElementById('formCompetencia');
+  const editCompId = document.getElementById('editCompId');
+  const nuevaCompInput = document.getElementById('nuevaComp');
+  const maxCuposInput = document.getElementById('maxCupos');
+  const formTitle = document.getElementById('formTitle');
+  const btnSubmitForm = document.getElementById('btnSubmitForm');
+  const btnCancelarEdit = document.getElementById('btnCancelarEdit');
+
+  btnLogin.addEventListener('click', () => {
+    adminPassword = adminPassInput.value.trim();
+    if (!adminPassword) return;
+
+    cargarDatosAdmin();
+  });
+
+  async function cargarDatosAdmin() {
+    try {
+      authSection.classList.add('hidden');
+      panelSection.classList.remove('hidden');
+
+      btnExcel.href = `/api/admin/exportar-excel?password=${encodeURIComponent(adminPassword)}`;
+
+      await cargarCompetenciasAdmin();
+      await cargarParticipantesAdmin();
+    } catch (err) {
+      authMsg.textContent = 'Error al verificar credenciales o conectar con el servidor.';
+    }
+  }
+
+  async function cargarCompetenciasAdmin() {
+    const res = await fetch('/api/competencias');
+    const data = await res.json();
+
+    if (data.length === 0) {
+      listaCompetencias.innerHTML = '<p style="font-size: 0.85rem; color: #64748b;">No hay competencias creadas aún.</p>';
+    } else {
+      listaCompetencias.innerHTML = '';
+      data.forEach(c => {
+        listaCompetencias.innerHTML += `
+          <div class="list-item">
+            <div>
+              🏆 <strong>${c.nombre}</strong><br>
+              <small style="color: #64748b;">Cupos: ${c.total_inscritos} / ${c.max_cupos} inscritos</small>
+            </div>
+            <div class="actions">
+              <button class="btn-edit" onclick="prepararEdicion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', ${c.max_cupos})">Editar</button>
+              <button class="btn-delete" onclick="eliminarCompetencia(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')">Eliminar</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+  }
+
+  async function cargarParticipantesAdmin() {
+    const res = await fetch('/api/admin/participantes', {
+      headers: { 'x-admin-password': adminPassword }
+    });
+    const data = await res.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      tablaParticipantes.innerHTML = '<tr><td colspan="5" style="color: #64748b;">No hay personas inscritas todavía.</td></tr>';
+    } else {
+      tablaParticipantes.innerHTML = '';
+      data.forEach(p => {
+        tablaParticipantes.innerHTML += `
+          <tr>
+            <td><strong>${p.nombre}</strong><br><small>${p.whatsapp}</small></td>
+            <td>${p.carrera}</td>
+            <td>${p.competencia}</td>
+            <td>${p.equipo}</td>
+            <td>
+              <button class="btn-delete" onclick="eliminarParticipante(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')">Eliminar</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+  }
+
+  // Preparar formulario para Editar Competencia
+  window.prepararEdicion = (id, nombre, maxCupos) => {
+    editCompId.value = id;
+    nuevaCompInput.value = nombre;
+    maxCuposInput.value = maxCupos;
+    
+    formTitle.textContent = "Editar Competencia";
+    btnSubmitForm.textContent = "Actualizar Competencia";
+    btnCancelarEdit.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  btnCancelarEdit.addEventListener('click', resetearFormulario);
+
+  function resetearFormulario() {
+    editCompId.value = '';
+    nuevaCompInput.value = '';
+    maxCuposInput.value = '3';
+    formTitle.textContent = "Crear Competencia";
+    btnSubmitForm.textContent = "Guardar Competencia";
+    btnCancelarEdit.classList.add('hidden');
+  }
+
+  // Crear o Editar competencia
+  formCompetencia.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = editCompId.value;
+    const nombre = nuevaCompInput.value.trim();
+    const max_cupos = maxCuposInput.value;
+
+    const url = id ? `/api/admin/competencia/${id}` : '/api/admin/competencia';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPassword
+      },
+      body: JSON.stringify({ nombre, max_cupos })
+    });
+
+    const data = await res.json();
+    alert(data.mensaje || data.error);
+    if (res.ok) {
+      resetearFormulario();
+      cargarCompetenciasAdmin();
+    }
+  });
+
+  // Eliminar competencia
+  window.eliminarCompetencia = async (id, nombre) => {
+    if (!confirm(`¿Estás seguro de que deseas eliminar la competencia "${nombre}"?\nSe borrarán los registros asociados.`)) return;
+
+    const res = await fetch(`/api/admin/competencia/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword }
+    });
+
+    const data = await res.json();
+    alert(data.mensaje || data.error);
+    if (res.ok) {
+      cargarDatosAdmin();
+    }
+  };
+
+  // Eliminar participante individual
+  window.eliminarParticipante = async (id, nombre) => {
+    if (!confirm(`¿Estás seguro de que deseas eliminar la inscripción de "${nombre}"?`)) return;
+
+    const res = await fetch(`/api/admin/participante/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword }
+    });
+
+    const data = await res.json();
+    alert(data.mensaje || data.error);
+    if (res.ok) {
+      cargarDatosAdmin();
+    }
+  };
+</script>
+
+</body>
+</html>
