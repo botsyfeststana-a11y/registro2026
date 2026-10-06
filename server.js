@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
-// Límite máximo de participantes por competencia (puedes ajustar esta constante)
+// Límite por defecto por competencia
 const LIMITE_PARTICIPANTES_POR_COMPETENCIA = 3; 
 
 app.use(express.json());
@@ -18,6 +18,9 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
   if (err) console.error("Error al conectar BD:", err.message);
   else console.log("Base de datos SQLite lista.");
 });
+
+// Activar Claves Foráneas en SQLite para eliminación en cascada
+db.run("PRAGMA foreign_keys = ON;");
 
 // Crear Tablas
 db.serialize(() => {
@@ -31,7 +34,7 @@ db.serialize(() => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     competencia_id INTEGER NOT NULL,
     nombre TEXT NOT NULL,
-    FOREIGN KEY (competencia_id) REFERENCES competencias(id)
+    FOREIGN KEY (competencia_id) REFERENCES competencias(id) ON DELETE CASCADE
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS participantes (
@@ -41,7 +44,7 @@ db.serialize(() => {
     whatsapp TEXT NOT NULL,
     carrera TEXT NOT NULL,
     equipo_id INTEGER NOT NULL,
-    FOREIGN KEY (equipo_id) REFERENCES equipos(id)
+    FOREIGN KEY (equipo_id) REFERENCES equipos(id) ON DELETE CASCADE
   )`);
 });
 
@@ -68,13 +71,13 @@ app.get('/api/competencias', (req, res) => {
   db.all(sql, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     
-    // Calcular puestos restantes
     const competenciasConCupos = rows.map(c => {
       const limite = c.max_cupos || LIMITE_PARTICIPANTES_POR_COMPETENCIA;
       const cuposRestantes = Math.max(0, limite - c.total_inscritos);
       return {
         id: c.id,
         nombre: c.nombre,
+        max_cupos: limite,
         total_inscritos: c.total_inscritos,
         cupos_restantes: cuposRestantes,
         lleno: cuposRestantes === 0
@@ -85,7 +88,7 @@ app.get('/api/competencias', (req, res) => {
   });
 });
 
-// Registro de participante con validación de límite de cupos
+// Registro de participante con validación de cupos
 app.post('/api/registro', (req, res) => {
   const { nombre, edad, whatsapp, carrera, competencia_id } = req.body;
 
@@ -93,7 +96,6 @@ app.post('/api/registro', (req, res) => {
     return res.status(400).json({ error: "Todos los campos son obligatorios." });
   }
 
-  // Validar cuántas personas están inscritas en total en la competencia
   const sqlVerificar = `
     SELECT c.max_cupos, COUNT(p.id) as total_inscritos
     FROM competencias c
@@ -112,7 +114,6 @@ app.post('/api/registro', (req, res) => {
       return res.status(400).json({ error: "Esta competencia ya ha alcanzado el límite máximo de participantes." });
     }
 
-    // Buscar un equipo con menos de 3 integrantes en esta competencia
     const queryBuscarEquipo = `
       SELECT e.id, COUNT(p.id) as total_integrantes
       FROM equipos e
@@ -129,7 +130,6 @@ app.post('/api/registro', (req, res) => {
       if (equipoDisponible) {
         insertarParticipante(equipoDisponible.id);
       } else {
-        // Crear un nuevo equipo automáticamente si no hay cupo en el actual
         db.get(`SELECT COUNT(*) as total FROM equipos WHERE competencia_id = ?`, [competencia_id], (err, row) => {
           const numEquipo = (row ? row.total : 0) + 1;
           const nombreNuevoEquipo = `Equipo ${numEquipo}`;
@@ -154,7 +154,7 @@ app.post('/api/registro', (req, res) => {
 
 // ---------------- RUTAS ADMINISTRADOR ----------------
 
-// Crear Competencia (por defecto con máximo de 3 cupos)
+// Crear Competencia
 app.post('/api/admin/competencia', authAdmin, (req, res) => {
   const { nombre, max_cupos } = req.body;
   const cupos = max_cupos ? parseInt(max_cupos) : LIMITE_PARTICIPANTES_POR_COMPETENCIA;
@@ -162,6 +162,40 @@ app.post('/api/admin/competencia', authAdmin, (req, res) => {
   db.run(`INSERT INTO competencias (nombre, max_cupos) VALUES (?, ?)`, [nombre, cupos], function (err) {
     if (err) return res.status(400).json({ error: "La competencia ya existe o es inválida." });
     res.json({ mensaje: "Competencia creada exitosamente." });
+  });
+});
+
+// Editar Competencia
+app.put('/api/admin/competencia/:id', authAdmin, (req, res) => {
+  const { id } = req.params;
+  const { nombre, max_cupos } = req.body;
+
+  if (!nombre || !max_cupos) {
+    return res.status(400).json({ error: "Nombre y cantidad de cupos son obligatorios." });
+  }
+
+  const sql = `UPDATE competencias SET nombre = ?, max_cupos = ? WHERE id = ?`;
+  db.run(sql, [nombre, parseInt(max_cupos), id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: "Competencia no encontrada." });
+    res.json({ mensaje: "Competencia actualizada exitosamente." });
+  });
+});
+
+// Eliminar Competencia (Elimina también sus equipos y participantes asociados)
+app.delete('/api/admin/competencia/:id', authAdmin, (req, res) => {
+  const { id } = req.params;
+
+  // Eliminar la competencia de la base de datos
+  db.run(`DELETE FROM competencias WHERE id = ?`, [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: "Competencia no encontrada." });
+
+    // Limpiar equipos y participantes huérfanos por seguridad
+    db.run(`DELETE FROM participantes WHERE equipo_id NOT IN (SELECT id FROM equipos)`);
+    db.run(`DELETE FROM equipos WHERE competencia_id NOT IN (SELECT id FROM competencias)`);
+
+    res.json({ mensaje: "Competencia y sus registros eliminados exitosamente." });
   });
 });
 
