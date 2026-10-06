@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro de Equipos</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input, select, button { width: 100%; padding: 10px; box-sizing: border-box; }
+    button { background-color: #007bff; color: white; border: none; cursor: pointer; margin-top: 10px; border-radius: 4px; }
+    button:hover { background-color: #0056b3; }
+    .excel-btn { background-color: #28a745; margin-top: 25px; text-align: center; display: block; text-decoration: none; color: white; padding: 10px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <h2>Inscripción de Equipos</h2>
+  
+  <form id="registerForm">
+    <div class="form-group">
+      <label for="fullName">Nombre Completo:</label>
+      <input type="text" id="fullName" required>
+    </div>
+
+    <div class="form-group">
+      <label for="age">Edad:</label>
+      <input type="number" id="age" required min="10" max="99">
+    </div>
+
+    <div class="form-group">
+      <label for="whatsapp">WhatsApp:</label>
+      <input type="tel" id="whatsapp" required placeholder="+503 7000-0000">
+    </div>
+
+    <div class="form-group">
+      <label for="career">Carrera:</label>
+      <input type="text" id="career" required>
+    </div>
+
+    <div class="form-group">
+      <label for="teamId">Selecciona tu Equipo (Máx 3 por equipo):</label>
+      <select id="teamId" required>
+        <option value="">Cargando equipos...</option>
+      </select>
+    </div>
+
+    <button type="submit" id="btnSubmit">Registrarse</button>
+  </form>
+
+  <a href="/api/export-excel" class="excel-btn">Descargar Reporte en Excel</a>
+
+  <script>
+    async function loadTeams() {
+      const select = document.getElementById('teamId');
+      try {
+        const res = await fetch('/api/teams');
+        const teams = await res.json();
+        select.innerHTML = '<option value="">-- Selecciona un equipo --</option>';
+        teams.forEach(t => {
+          const option = document.createElement('option');
+          option.value = t.id;
+          if (t.current_count >= t.max_capacity) {
+            option.textContent = `${t.name} (COMPLETO - 3/3)`;
+            option.disabled = true;
+          } else {
+            option.textContent = `${t.name} (${t.current_count}/3 ocupados)`;
+          }
+          select.appendChild(option);
+        });
+      } catch (err) {
+        select.innerHTML = '<option value="">Error al cargar equipos</option>';
+      }
+    }
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        fullName: document.getElementById('fullName').value,
+        age: document.getElementById('age').value,
+        whatsapp: document.getElementById('whatsapp').value,
+        career: document.getElementById('career').value,
+        teamId: document.getElementById('teamId').value
+      };
+
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert('¡Registro exitoso!');
+          document.getElementById('registerForm').reset();
+          loadTeams();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (err) {
+        alert('Error al conectar con el servidor.');
+      }
+    });
+
+    loadTeams();
+  </script>
+</body>
+</html>
