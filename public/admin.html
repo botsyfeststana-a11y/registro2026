@@ -15,16 +15,18 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 700px; }
+    .container { width: 100%; max-width: 600px; }
     .card { background: var(--card); padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
     h1, h2 { color: var(--text); margin-bottom: 15px; }
     .form-group { margin-bottom: 12px; }
     label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
-    input, select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; }
+    input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; }
     .btn { padding: 10px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; width: 100%; font-size: 0.95rem; }
     .btn-excel { background: var(--success); text-decoration: none; display: block; text-align: center; }
     .hidden { display: none; }
     .status-msg { margin-top: 10px; font-size: 0.85rem; font-weight: 600; text-align: center; }
+    .list-item { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    .list-item:last-child { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -48,7 +50,7 @@
     <div class="card">
       <h2>Exportar Datos</h2>
       <p style="margin-bottom: 15px; font-size: 0.9rem; color: #475569;">
-        Descarga el reporte completo de participantes en formato Excel (.xlsx).
+        Descarga el reporte completo de participantes agrupados en sus respectivos equipos (máximo 3 por equipo).
       </p>
       <a id="btnExcel" href="#" class="btn btn-excel">📥 Descargar Reporte en Excel (.xlsx)</a>
     </div>
@@ -65,20 +67,12 @@
       </form>
     </div>
 
-    <!-- Crear Equipo -->
+    <!-- Lista de Competencias Activas -->
     <div class="card">
-      <h2>Crear Equipo en Competencia</h2>
-      <form id="formEquipo">
-        <div class="form-group">
-          <label for="selectCompAdmin">Seleccionar Competencia</label>
-          <select id="selectCompAdmin" required></select>
-        </div>
-        <div class="form-group">
-          <label for="nuevoEquipo">Nombre del Equipo</label>
-          <input type="text" id="nuevoEquipo" required placeholder="Ej. Alpha Tech">
-        </div>
-        <button class="btn" type="submit">Añadir Equipo</button>
-      </form>
+      <h2>Competencias Creadas</h2>
+      <div id="listaCompetencias">
+        <p style="font-size: 0.85rem; color: #64748b;">Cargando...</p>
+      </div>
     </div>
 
   </div>
@@ -92,8 +86,8 @@
   const adminPassInput = document.getElementById('adminPass');
   const btnLogin = document.getElementById('btnLogin');
   const authMsg = document.getElementById('authMsg');
-  const selectCompAdmin = document.getElementById('selectCompAdmin');
   const btnExcel = document.getElementById('btnExcel');
+  const listaCompetencias = document.getElementById('listaCompetencias');
 
   btnLogin.addEventListener('click', () => {
     adminPassword = adminPassInput.value.trim();
@@ -112,10 +106,14 @@
 
       btnExcel.href = `/api/admin/exportar-excel?password=${encodeURIComponent(adminPassword)}`;
 
-      selectCompAdmin.innerHTML = '<option value="">-- Selecciona Competencia --</option>';
-      data.forEach(c => {
-        selectCompAdmin.innerHTML += `<option value="${c.id}">${c.nombre}</option>`;
-      });
+      if (data.length === 0) {
+        listaCompetencias.innerHTML = '<p style="font-size: 0.85rem; color: #64748b;">No hay competencias creadas aún.</p>';
+      } else {
+        listaCompetencias.innerHTML = '';
+        data.forEach(c => {
+          listaCompetencias.innerHTML += `<div class="list-item">🏆 <strong>${c.nombre}</strong></div>`;
+        });
+      }
     } catch (err) {
       authMsg.textContent = 'Error al verificar credenciales o conectar con el servidor.';
     }
@@ -124,7 +122,7 @@
   // Crear nueva competencia
   document.getElementById('formCompetencia').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const nombre = document.getElementById('nuevaComp').value;
+    const nombre = document.getElementById('nuevaComp').value.trim();
 
     const res = await fetch('/api/admin/competencia', {
       method: 'POST',
@@ -140,28 +138,6 @@
     if (res.ok) {
       document.getElementById('nuevaComp').value = '';
       cargarCompetenciasAdmin();
-    }
-  });
-
-  // Crear nuevo equipo
-  document.getElementById('formEquipo').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const competencia_id = parseInt(selectCompAdmin.value);
-    const nombre = document.getElementById('nuevoEquipo').value;
-
-    const res = await fetch('/api/admin/equipo', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-password': adminPassword
-      },
-      body: JSON.stringify({ competencia_id, nombre })
-    });
-
-    const data = await res.json();
-    alert(data.mensaje || data.error);
-    if (res.ok) {
-      document.getElementById('nuevoEquipo').value = '';
     }
   });
 </script>
