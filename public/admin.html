@@ -2,173 +2,52 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panel de Administración - Competencias</title>
+  <title>Panel Administrador</title>
   <style>
-    :root {
-      --primary: #2563eb;
-      --success: #16a34a;
-      --bg: #f1f5f9;
-      --card: #ffffff;
-      --text: #0f172a;
-      --border: #cbd5e1;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 700px; }
-    .card { background: var(--card); padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    h1, h2 { color: var(--text); margin-bottom: 15px; }
-    .form-group { margin-bottom: 12px; }
-    label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
-    input, select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; }
-    .btn { padding: 10px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; width: 100%; font-size: 0.95rem; }
-    .btn-excel { background: var(--success); text-decoration: none; display: block; text-align: center; }
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
     .hidden { display: none; }
-    .status-msg { margin-top: 10px; font-size: 0.85rem; font-weight: 600; text-align: center; }
+    input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+    button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <!-- Sección de Autenticación -->
-  <div id="authSection" class="card">
-    <h1>Acceso Administrador</h1>
-    <div class="form-group">
-      <label for="adminPass">Contraseña de Administrador</label>
-      <input type="password" id="adminPass" placeholder="Ingresa tu clave de Render">
-    </div>
-    <button class="btn" id="btnLogin">Ingresar al Panel</button>
-    <div id="authMsg" class="status-msg" style="color: red;"></div>
+  <!-- Vista de Login (Lo primero que debe verse) -->
+  <div id="login-section">
+    <h2>Acceso Administrador</h2>
+    <p>Ingresa la contraseña configurada en Render:</p>
+    <input type="password" id="adminPassword" placeholder="Contraseña de Administrador">
+    <button onclick="login()">Ingresar al Panel</button>
+    <p id="login-error" style="color: red;"></p>
   </div>
 
-  <!-- Panel de Control (Oculto hasta autenticarse) -->
-  <div id="panelSection" class="hidden">
-    
-    <!-- Descargar Excel -->
-    <div class="card">
-      <h2>Exportar Datos</h2>
-      <p style="margin-bottom: 15px; font-size: 0.9rem; color: #475569;">
-        Descarga el reporte completo de participantes en formato Excel (.xlsx).
-      </p>
-      <a id="btnExcel" href="#" class="btn btn-excel">📥 Descargar Excel (.xlsx)</a>
-    </div>
-
-    <!-- Crear Competencia -->
-    <div class="card">
-      <h2>Crear Competencia</h2>
-      <form id="formCompetencia">
-        <div class="form-group">
-          <label for="nuevaComp">Nombre de la Competencia</label>
-          <input type="text" id="nuevaComp" required placeholder="Ej. Robótica">
-        </div>
-        <button class="btn" type="submit">Guardar Competencia</button>
-      </form>
-    </div>
-
-    <!-- Crear Equipo -->
-    <div class="card">
-      <h2>Crear Equipo en Competencia</h2>
-      <form id="formEquipo">
-        <div class="form-group">
-          <label for="selectCompAdmin">Seleccionar Competencia</label>
-          <select id="selectCompAdmin" required></select>
-        </div>
-        <div class="form-group">
-          <label for="nuevoEquipo">Nombre del Equipo</label>
-          <input type="text" id="nuevoEquipo" required placeholder="Ej. Alpha Tech">
-        </div>
-        <button class="btn" type="submit">Añadir Equipo</button>
-      </form>
-    </div>
-
+  <!-- Vista del Panel (Oculta hasta iniciar sesión) -->
+  <div id="admin-panel" class="hidden">
+    <h2>Panel de Control</h2>
+    <button onclick="downloadExcel()">📥 Descargar Reporte en Excel (.xlsx)</button>
+    <hr>
+    <h3>Administración de Equipos</h3>
+    <p>Aquí se gestionarán los cupos y competencias.</p>
   </div>
-</div>
 
-<script>
-  let adminPassword = '';
+  <script>
+    let savedPassword = '';
 
-  const authSection = document.getElementById('authSection');
-  const panelSection = document.getElementById('panelSection');
-  const adminPassInput = document.getElementById('adminPass');
-  const btnLogin = document.getElementById('btnLogin');
-  const authMsg = document.getElementById('authMsg');
-  const selectCompAdmin = document.getElementById('selectCompAdmin');
-  const btnExcel = document.getElementById('btnExcel');
-
-  btnLogin.addEventListener('click', () => {
-    adminPassword = adminPassInput.value.trim();
-    if (!adminPassword) return;
-
-    // Probar contraseña cargando competencias
-    cargarCompetenciasAdmin();
-  });
-
-  async function cargarCompetenciasAdmin() {
-    try {
-      const res = await fetch('/api/competencias');
-      const data = await res.json();
-
-      // Si la carga fue correcta, desbloquear panel
-      authSection.classList.add('hidden');
-      panelSection.classList.remove('hidden');
-
-      // Configurar enlace de descarga con la contraseña enviada en la URL
-      btnExcel.href = `/api/admin/exportar-excel?password=${encodeURIComponent(adminPassword)}`;
-
-      // Poblar selector
-      selectCompAdmin.innerHTML = '<option value="">-- Selecciona Competencia --</option>';
-      data.forEach(c => {
-        selectCompAdmin.innerHTML += `<option value="${c.id}">${c.nombre}</option>`;
-      });
-    } catch (err) {
-      authMsg.textContent = 'Error al verificar credenciales o conectar con el servidor.';
+    function login() {
+      const pwd = document.getElementById('adminPassword').value;
+      if (!pwd) {
+        document.getElementById('login-error').innerText = 'Por favor ingresa una contraseña.';
+        return;
+      }
+      savedPassword = pwd;
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('admin-panel').classList.remove('hidden');
     }
-  }
 
-  // Crear nueva competencia
-  document.getElementById('formCompetencia').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const nombre = document.getElementById('nuevaComp').value;
-
-    const res = await fetch('/api/admin/competencia', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-password': adminPassword
-      },
-      body: JSON.stringify({ nombre })
-    });
-
-    const data = await res.json();
-    alert(data.mensaje || data.error);
-    if (res.ok) {
-      document.getElementById('nuevaComp').value = '';
-      cargarCompetenciasAdmin();
+    function downloadExcel() {
+      window.location.href = `/api/export-excel?password=${encodeURIComponent(savedPassword)}`;
     }
-  });
-
-  // Crear nuevo equipo
-  document.getElementById('formEquipo').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const competencia_id = parseInt(selectCompAdmin.value);
-    const nombre = document.getElementById('nuevoEquipo').value;
-
-    const res = await fetch('/api/admin/equipo', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-password': adminPassword
-      },
-      body: JSON.stringify({ competencia_id, nombre })
-    });
-
-    const data = await res.json();
-    alert(data.mensaje || data.error);
-    if (res.ok) {
-      document.getElementById('nuevoEquipo').value = '';
-    }
-  });
-</script>
-
+  </script>
 </body>
 </html>
