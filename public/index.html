@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inscripción Jueces</title>
+  <title>Inscripción a Competencias</title>
   <style>
     :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --border: #cbd5e1; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
@@ -43,9 +43,9 @@
     </div>
 
     <div class="form-group">
-      <label>Selecciona Actividad/Competencia *</label>
+      <label>Selecciona Competencia *</label>
       <select id="competencia" required>
-        <option value="">-- Cargar Actividad/Competencia... --</option>
+        <option value="">Cargando competencias...</option>
       </select>
     </div>
 
@@ -56,28 +56,36 @@
 <script>
   // Cargar competencias y mostrar conteo de puestos restantes
   async function cargarCompetencias() {
-    const res = await fetch('/api/competencias');
-    const competencias = await res.json();
     const selectComp = document.getElementById('competencia');
     
-    selectComp.innerHTML = '<option value="">-- Selecciona una competencia --</option>';
-    
-    let competenciasDisponibles = 0;
+    // Mensaje informativo por si Render está reactivando el servidor tras inactividad
+    selectComp.innerHTML = '<option value="">Despertando servidor... (puede tardar unos segundos)</option>';
 
-    competencias.forEach(c => {
-      // Solo mostrar competencias que tengan puestos disponibles
-      if (!c.lleno) {
-        competenciasDisponibles++;
-        const textoCupos = c.cupos_restantes === 1 ? '1 puesto disponible' : `${c.cupos_restantes} puestos disponibles`;
-        selectComp.innerHTML += `<option value="${c.id}">${c.nombre} (${textoCupos})</option>`;
+    try {
+      const res = await fetch('/api/competencias');
+      const competencias = await res.json();
+      
+      selectComp.innerHTML = '<option value="">-- Selecciona una competencia --</option>';
+      let competenciasDisponibles = 0;
+
+      competencias.forEach(c => {
+        // Solo mostrar competencias que tengan puestos disponibles
+        if (!c.lleno) {
+          competenciasDisponibles++;
+          const textoCupos = c.cupos_restantes === 1 ? '1 puesto disponible' : `${c.cupos_restantes} puestos disponibles`;
+          selectComp.innerHTML += `<option value="${c.id}">${c.nombre} (${textoCupos})</option>`;
+        }
+      });
+
+      if (competenciasDisponibles === 0) {
+        selectComp.innerHTML = '<option value="">No hay competencias con cupos disponibles</option>';
       }
-    });
-
-    if (competenciasDisponibles === 0) {
-      selectComp.innerHTML = '<option value="">No hay competencias con cupos disponibles</option>';
+    } catch (err) {
+      selectComp.innerHTML = '<option value="">Error al cargar competencias. Intenta recargar la página.</option>';
     }
   }
 
+  // Ejecutar la carga al abrir la página
   cargarCompetencias();
 
   // Guardar Registro
