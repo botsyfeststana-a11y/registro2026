@@ -1,6 +1,7 @@
 {
-  "name": "registro-equipos",
+  "name": "sistema-competencias",
   "version": "1.0.0",
+  "description": "Sistema de inscripción a competencias con límite de 3 personas por equipo y exportación a Excel",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -8,7 +9,9 @@
   "dependencies": {
     "exceljs": "^4.4.0",
     "express": "^4.19.2",
-    "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
