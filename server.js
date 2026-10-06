@@ -7,6 +7,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
+// Límite máximo de participantes por competencia (puedes ajustar esta constante)
+const LIMITE_PARTICIPANTES_POR_COMPETENCIA = 3; 
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -20,7 +23,8 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS competencias (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT UNIQUE NOT NULL
+    nombre TEXT UNIQUE NOT NULL,
+    max_cupos INTEGER DEFAULT 3
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS equipos (
@@ -50,15 +54,38 @@ function authAdmin(req, res, next) {
 
 // ---------------- RUTAS PÚBLICAS ----------------
 
-// Obtener competencias
+// Obtener competencias con conteo de cupos disponibles
 app.get('/api/competencias', (req, res) => {
-  db.all(`SELECT * FROM competencias`, [], (err, rows) => {
+  const sql = `
+    SELECT c.id, c.nombre, c.max_cupos,
+           COUNT(p.id) as total_inscritos
+    FROM competencias c
+    LEFT JOIN equipos e ON c.id = e.competencia_id
+    LEFT JOIN participantes p ON e.id = p.equipo_id
+    GROUP BY c.id
+  `;
+
+  db.all(sql, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    
+    // Calcular puestos restantes
+    const competenciasConCupos = rows.map(c => {
+      const limite = c.max_cupos || LIMITE_PARTICIPANTES_POR_COMPETENCIA;
+      const cuposRestantes = Math.max(0, limite - c.total_inscritos);
+      return {
+        id: c.id,
+        nombre: c.nombre,
+        total_inscritos: c.total_inscritos,
+        cupos_restantes: cuposRestantes,
+        lleno: cuposRestantes === 0
+      };
+    });
+
+    res.json(competenciasConCupos);
   });
 });
 
-// Registro de participante con asignación automática de equipo (máx 3 por equipo)
+// Registro de participante con validación de límite de cupos
 app.post('/api/registro', (req, res) => {
   const { nombre, edad, whatsapp, carrera, competencia_id } = req.body;
 
@@ -66,52 +93,73 @@ app.post('/api/registro', (req, res) => {
     return res.status(400).json({ error: "Todos los campos son obligatorios." });
   }
 
-  // Buscar un equipo en esta competencia que tenga menos de 3 integrantes
-  const queryBuscarEquipo = `
-    SELECT e.id, e.nombre, COUNT(p.id) as total_integrantes
-    FROM equipos e
+  // Validar cuántas personas están inscritas en total en la competencia
+  const sqlVerificar = `
+    SELECT c.max_cupos, COUNT(p.id) as total_inscritos
+    FROM competencias c
+    LEFT JOIN equipos e ON c.id = e.competencia_id
     LEFT JOIN participantes p ON e.id = p.equipo_id
-    WHERE e.competencia_id = ?
-    GROUP BY e.id
-    HAVING total_integrantes < 3
-    LIMIT 1
+    WHERE c.id = ?
+    GROUP BY c.id
   `;
 
-  db.get(queryBuscarEquipo, [competencia_id], (err, equipoDisponible) => {
+  db.get(sqlVerificar, [competencia_id], (err, comp) => {
     if (err) return res.status(500).json({ error: err.message });
+    if (!comp) return res.status(404).json({ error: "La competencia seleccionada no existe." });
 
-    if (equipoDisponible) {
-      // Registrar en el equipo encontrado
-      insertarParticipante(equipoDisponible.id);
-    } else {
-      // Si no hay equipo con cupo, crear un nuevo equipo automáticamente
-      db.get(`SELECT COUNT(*) as total FROM equipos WHERE competencia_id = ?`, [competencia_id], (err, row) => {
-        const numEquipo = (row ? row.total : 0) + 1;
-        const nombreNuevoEquipo = `Equipo ${numEquipo}`;
+    const limite = comp.max_cupos || LIMITE_PARTICIPANTES_POR_COMPETENCIA;
+    if (comp.total_inscritos >= limite) {
+      return res.status(400).json({ error: "Esta competencia ya ha alcanzado el límite máximo de participantes." });
+    }
 
-        db.run(`INSERT INTO equipos (competencia_id, nombre) VALUES (?, ?)`, [competencia_id, nombreNuevoEquipo], function (err) {
-          if (err) return res.status(500).json({ error: err.message });
-          insertarParticipante(this.lastID);
+    // Buscar un equipo con menos de 3 integrantes en esta competencia
+    const queryBuscarEquipo = `
+      SELECT e.id, COUNT(p.id) as total_integrantes
+      FROM equipos e
+      LEFT JOIN participantes p ON e.id = p.equipo_id
+      WHERE e.competencia_id = ?
+      GROUP BY e.id
+      HAVING total_integrantes < 3
+      LIMIT 1
+    `;
+
+    db.get(queryBuscarEquipo, [competencia_id], (err, equipoDisponible) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      if (equipoDisponible) {
+        insertarParticipante(equipoDisponible.id);
+      } else {
+        // Crear un nuevo equipo automáticamente si no hay cupo en el actual
+        db.get(`SELECT COUNT(*) as total FROM equipos WHERE competencia_id = ?`, [competencia_id], (err, row) => {
+          const numEquipo = (row ? row.total : 0) + 1;
+          const nombreNuevoEquipo = `Equipo ${numEquipo}`;
+
+          db.run(`INSERT INTO equipos (competencia_id, nombre) VALUES (?, ?)`, [competencia_id, nombreNuevoEquipo], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            insertarParticipante(this.lastID);
+          });
         });
-      });
-    }
+      }
 
-    function insertarParticipante(equipoId) {
-      const sql = `INSERT INTO participantes (nombre, edad, whatsapp, carrera, equipo_id) VALUES (?, ?, ?, ?, ?)`;
-      db.run(sql, [nombre, edad, whatsapp, carrera, equipoId], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ mensaje: "¡Inscripción realizada con éxito!" });
-      });
-    }
+      function insertarParticipante(equipoId) {
+        const sql = `INSERT INTO participantes (nombre, edad, whatsapp, carrera, equipo_id) VALUES (?, ?, ?, ?, ?)`;
+        db.run(sql, [nombre, edad, whatsapp, carrera, equipoId], function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ mensaje: "¡Inscripción realizada con éxito!" });
+        });
+      }
+    });
   });
 });
 
 // ---------------- RUTAS ADMINISTRADOR ----------------
 
-// Crear Competencia
+// Crear Competencia (por defecto con máximo de 3 cupos)
 app.post('/api/admin/competencia', authAdmin, (req, res) => {
-  const { nombre } = req.body;
-  db.run(`INSERT INTO competencias (nombre) VALUES (?)`, [nombre], function (err) {
+  const { nombre, max_cupos } = req.body;
+  const cupos = max_cupos ? parseInt(max_cupos) : LIMITE_PARTICIPANTES_POR_COMPETENCIA;
+
+  db.run(`INSERT INTO competencias (nombre, max_cupos) VALUES (?, ?)`, [nombre, cupos], function (err) {
     if (err) return res.status(400).json({ error: "La competencia ya existe o es inválida." });
     res.json({ mensaje: "Competencia creada exitosamente." });
   });
