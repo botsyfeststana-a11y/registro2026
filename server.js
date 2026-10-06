@@ -12,6 +12,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Puerto adaptable para Render
 const PORT = process.env.PORT || 3000;
+const ADMIN_PASSWORD = 'Mangy123'; // Contraseña de administrador
 let db;
 
 async function initDB() {
@@ -50,6 +51,10 @@ async function initDB() {
     await db.run('INSERT INTO teams (id, name) VALUES (?, ?)', ['equipo-3', 'Equipo Gamma']);
   }
 }
+
+// -------------------------------------------------------------
+// RUTAS PÚBLICAS (PÚBLICO EN GENERAL)
+// -------------------------------------------------------------
 
 app.get('/api/teams', async (req, res) => {
   try {
@@ -149,6 +154,44 @@ app.get('/api/export-excel', async (req, res) => {
     res.end();
   } catch (error) {
     res.status(500).send('Error al generar Excel.');
+  }
+});
+
+// -------------------------------------------------------------
+// RUTAS DE ADMINISTRACIÓN (PROTEGIDAS)
+// -------------------------------------------------------------
+
+// Validar Contraseña de Administrador
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    return res.json({ success: true });
+  }
+  return res.status(401).json({ error: 'Contraseña incorrecta.' });
+});
+
+// Agregar un Nuevo Equipo
+app.post('/api/teams', async (req, res) => {
+  const { password, name } = req.body;
+
+  // 1. Validar contraseña
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Acceso no autorizado. Contraseña incorrecta.' });
+  }
+
+  // 2. Validar nombre de equipo
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'El nombre del equipo es obligatorio.' });
+  }
+
+  try {
+    // Generar un ID simple basado en el nombre
+    const id = 'equipo-' + Date.now();
+
+    await db.run('INSERT INTO teams (id, name, max_capacity) VALUES (?, ?, 3)', [id, name.trim()]);
+    return res.json({ success: true, message: 'Equipo agregado correctamente.' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Error al agregar el equipo.' });
   }
 });
 
