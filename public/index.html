@@ -3,193 +3,121 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Registro de Equipos</title>
+  <title>Inscripción a Competencias</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; color: #333; }
-    .form-group { margin-bottom: 15px; }
-    label { display: block; margin-bottom: 5px; font-weight: bold; }
-    input, select, button { width: 100%; padding: 10px; box-sizing: border-box; }
-    button { background-color: #007bff; color: white; border: none; cursor: pointer; margin-top: 10px; border-radius: 4px; font-weight: bold; }
-    button:hover { background-color: #0056b3; }
-    .excel-btn { background-color: #28a745; margin-top: 25px; text-align: center; display: block; text-decoration: none; color: white; padding: 10px; border-radius: 4px; font-weight: bold; }
-    
-    /* Estilos del Panel de Administración */
-    .admin-card { margin-top: 40px; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: #f9f9f9; }
-    .admin-card h3 { margin-top: 0; color: #444; }
-    .hidden { display: none; }
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --border: #e2e8f0;
+      --disabled: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 600px; background: var(--card-bg); padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: var(--primary); margin-bottom: 20px; font-size: 1.5rem; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
+    input:focus, select:focus { border-color: var(--primary); }
+    button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
+    button:hover { background: var(--primary-hover); }
+    button:disabled { background: var(--disabled); cursor: not-allowed; }
+    .status-msg { margin-top: 15px; padding: 12px; border-radius: 6px; font-size: 0.9rem; text-align: center; display: none; }
+    .status-msg.success { background: #dcfce7; color: #166534; display: block; }
+    .status-msg.error { background: #fee2e2; color: #991b1b; display: block; }
+    .info-badge { font-size: 0.8rem; color: #64748b; margin-top: 4px; display: block; }
   </style>
 </head>
 <body>
 
-  <h2>Inscripción de Equipos</h2>
+<div class="container">
+  <h1>Inscripción a Equipos</h1>
   
-  <form id="registerForm">
+  <form id="registroForm">
     <div class="form-group">
-      <label for="fullName">Nombre Completo:</label>
-      <input type="text" id="fullName" required>
+      <label for="nombre">Nombre Completo *</label>
+      <input type="text" id="nombre" required placeholder="Ej. Juan Pérez">
     </div>
 
     <div class="form-group">
-      <label for="age">Edad:</label>
-      <input type="number" id="age" required min="10" max="99">
+      <label for="edad">Edad *</label>
+      <input type="number" id="edad" required min="10" max="99" placeholder="Ej. 20">
     </div>
 
     <div class="form-group">
-      <label for="whatsapp">WhatsApp:</label>
-      <input type="tel" id="whatsapp" required placeholder="+503 7000-0000">
+      <label for="whatsapp">WhatsApp *</label>
+      <input type="tel" id="whatsapp" required placeholder="Ej. +5215512345678">
     </div>
 
     <div class="form-group">
-      <label for="career">Carrera:</label>
-      <input type="text" id="career" required>
+      <label for="carrera">Nombre de Carrera *</label>
+      <input type="text" id="carrera" required placeholder="Ej. Ingeniería en Sistemas">
     </div>
 
     <div class="form-group">
-      <label for="teamId">Selecciona tu Equipo (Máx 3 por equipo):</label>
-      <select id="teamId" required>
-        <option value="">Cargando equipos...</option>
+      <label for="competencia">Selecciona Competencia *</label>
+      <select id="competencia" required>
+        <option value="">-- Cargar competencias... --</option>
       </select>
     </div>
 
-    <button type="submit" id="btnSubmit">Registrarse</button>
+    <div class="form-group">
+      <label for="equipo">Selecciona Equipo (Máximo 3 inscritos) *</label>
+      <select id="equipo" required disabled>
+        <option value="">-- Selecciona primero una competencia --</option>
+      </select>
+      <span class="info-badge">Los equipos que hayan alcanzado los 3 cupos no estarán disponibles.</span>
+    </div>
+
+    <button type="submit" id="btnSubmit">Completar Registro</button>
   </form>
 
-  <a href="/api/export-excel" class="excel-btn">Descargar Reporte en Excel</a>
+  <div id="statusMsg" class="status-msg"></div>
+</div>
 
-  <!-- ========================================== -->
-  <!-- SECCIÓN DE ADMINISTRACIÓN                  -->
-  <!-- ========================================== -->
-  <div class="admin-card">
-    <h3>Panel de Administración</h3>
+<script>
+  let competenciasData = [];
 
-    <!-- Formulario de Login -->
-    <div id="loginSection">
-      <div class="form-group">
-        <label for="adminPass">Contraseña de Administrador:</label>
-        <input type="password" id="adminPass" placeholder="Ingresa contraseña">
-      </div>
-      <button type="button" onclick="loginAdmin()">Ingresar como Admin</button>
-    </div>
+  const selectCompetencia = document.getElementById('competencia');
+  const selectEquipo = document.getElementById('equipo');
+  const form = document.getElementById('registroForm');
+  const statusMsg = document.getElementById('statusMsg');
+  const btnSubmit = document.getElementById('btnSubmit');
 
-    <!-- Formulario de Agregar Equipo (Oculto inicialmente) -->
-    <div id="adminPanel" class="hidden">
-      <p style="color: green; font-weight: bold;">✔ Sesión de Administrador Activa</p>
-      <div class="form-group">
-        <label for="newTeamName">Nombre del Nuevo Equipo:</label>
-        <input type="text" id="newTeamName" placeholder="Ej: Equipo Delta">
-      </div>
-      <button type="button" onclick="addTeam()" style="background-color: #6f42c1;">Agregar Equipo</button>
-    </div>
-  </div>
+  // Cargar lista de competencias y equipos disponibles al inicio
+  async function cargarCompetencias() {
+    try {
+      const res = await fetch('/api/competencias');
+      competenciasData = await res.json();
 
-  <script>
-    let currentAdminPassword = '';
-
-    // Cargar equipos en la lista desplegable
-    async function loadTeams() {
-      const select = document.getElementById('teamId');
-      try {
-        const res = await fetch('/api/teams');
-        const teams = await res.json();
-        select.innerHTML = '<option value="">-- Selecciona un equipo --</option>';
-        teams.forEach(t => {
-          const option = document.createElement('option');
-          option.value = t.id;
-          if (t.current_count >= t.max_capacity) {
-            option.textContent = `${t.name} (COMPLETO - 3/3)`;
-            option.disabled = true;
-          } else {
-            option.textContent = `${t.name} (${t.current_count}/3 ocupados)`;
-          }
-          select.appendChild(option);
-        });
-      } catch (err) {
-        select.innerHTML = '<option value="">Error al cargar equipos</option>';
-      }
+      selectCompetencia.innerHTML = '<option value="">-- Selecciona una competencia --</option>';
+      competenciasData.forEach(c => {
+        selectCompetencia.innerHTML += `<option value="${c.id}">${c.nombre}</option>`;
+      });
+    } catch (err) {
+      mostrarMensaje('Error al obtener la lista de competencias.', 'error');
     }
+  }
 
-    // Registro de Usuario
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const payload = {
-        fullName: document.getElementById('fullName').value,
-        age: document.getElementById('age').value,
-        whatsapp: document.getElementById('whatsapp').value,
-        career: document.getElementById('career').value,
-        teamId: document.getElementById('teamId').value
-      };
+  // Actualizar el selector de equipos según la competencia seleccionada
+  selectCompetencia.addEventListener('change', (e) => {
+    const compId = parseInt(e.target.value);
+    const comp = competenciasData.find(c => c.id === compId);
 
-      try {
-        const res = await fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (res.ok) {
-          alert('¡Registro exitoso!');
-          document.getElementById('registerForm').reset();
-          loadTeams();
+    selectEquipo.innerHTML = '';
+    selectEquipo.disabled = true;
+
+    if (comp && comp.equipos.length > 0) {
+      selectEquipo.disabled = false;
+      selectEquipo.innerHTML = '<option value="">-- Selecciona un equipo --</option>';
+
+      comp.equipos.forEach(eq => {
+        const option = document.createElement('option');
+        option.value = eq.id;
+        
+        if (eq.disponible) {
+          option.textContent = `${eq.nombre} (${eq.total_inscritos}/3 inscritos)`;
         } else {
-          alert('Error: ' + data.error);
-        }
-      } catch (err) {
-        alert('Error al conectar con el servidor.');
-      }
-    });
-
-    // Iniciar Sesión de Administrador
-    async function loginAdmin() {
-      const pass = document.getElementById('adminPass').value;
-      try {
-        const res = await fetch('/api/admin/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: pass })
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-          currentAdminPassword = pass;
-          document.getElementById('loginSection').classList.add('hidden');
-          document.getElementById('adminPanel').classList.remove('hidden');
-        } else {
-          alert(data.error);
-        }
-      } catch (err) {
-        alert('Error al verificar la contraseña.');
-      }
-    }
-
-    // Agregar Nuevo Equipo
-    async function addTeam() {
-      const name = document.getElementById('newTeamName').value;
-      if (!name) return alert('Escribe el nombre del equipo');
-
-      try {
-        const res = await fetch('/api/teams', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            password: currentAdminPassword,
-            name: name
-          })
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-          alert('¡Equipo creado con éxito!');
-          document.getElementById('newTeamName').value = '';
-          loadTeams(); // Recarga la lista para mostrar el nuevo equipo inmediatamente
-        } else {
-          alert('Error: ' + data.error);
-        }
-      } catch (err) {
-        alert('Error al crear el equipo.');
-      }
-    }
-
-    loadTeams();
-  </script>
-</body>
-</html>
