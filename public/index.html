@@ -54,15 +54,28 @@
 </div>
 
 <script>
-  // Cargar competencias al entrar
+  // Cargar competencias y mostrar conteo de puestos restantes
   async function cargarCompetencias() {
     const res = await fetch('/api/competencias');
     const competencias = await res.json();
     const selectComp = document.getElementById('competencia');
+    
     selectComp.innerHTML = '<option value="">-- Selecciona una competencia --</option>';
+    
+    let competenciasDisponibles = 0;
+
     competencias.forEach(c => {
-      selectComp.innerHTML += `<option value="${c.id}">${c.nombre}</option>`;
+      // Solo mostrar competencias que tengan puestos disponibles
+      if (!c.lleno) {
+        competenciasDisponibles++;
+        const textoCupos = c.cupos_restantes === 1 ? '1 puesto disponible' : `${c.cupos_restantes} puestos disponibles`;
+        selectComp.innerHTML += `<option value="${c.id}">${c.nombre} (${textoCupos})</option>`;
+      }
     });
+
+    if (competenciasDisponibles === 0) {
+      selectComp.innerHTML = '<option value="">No hay competencias con cupos disponibles</option>';
+    }
   }
 
   cargarCompetencias();
@@ -90,6 +103,8 @@
 
     if (res.ok) {
       document.getElementById('registroForm').reset();
+      // Volver a cargar competencias para actualizar los puestos restantes en tiempo real
+      cargarCompetencias();
     }
   });
 </script>
