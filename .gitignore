@@ -1,2 +1,14 @@
+# Dependencias de Node (Render las instala solo)
 node_modules/
-database.db
+
+# Base de datos local (Render la creará en su servidor)
+database.sqlite
+database.sqlite-journal
+
+# Variables de entorno secretas
+.env
+
+# Logs del sistema
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
